@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>CalmCompanion</title>
+
+  <!-- iOS & Android Fullscreen App Meta Tags -->
+  <meta name="theme-color" content="#4a7c59" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="CalmCompanion" />
+  <meta name="mobile-web-app-capable" content="yes" />
+
+  <!-- Embedded SVG App Icon -->
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%234a7c59'/><text x='50%' y='55%' dominant-baseline='middle' text-anchor='middle' font-size='55'>🌿</text></svg>" />
+  <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%234a7c59'/><text x='50%' y='55%' dominant-baseline='middle' text-anchor='middle' font-size='55'>🌿</text></svg>" />
+
+  <style>
+    :root {
+      --bg: #f4f7f6;
+      --card: #ffffff;
+      --primary: #4a7c59;
+      --text: #2c3e50;
+      --bot-msg: #e8f0ec;
+      --user-msg: #4a7c59;
+    }
+    * { box-sizing: border-box; font-family: system-ui, -apple-system, sans-serif; -webkit-tap-highlight-color: transparent; }
+    body { margin: 0; background: var(--bg); color: var(--text); display: flex; justify-content: center; height: 100dvh; overflow: hidden; }
+    .app { width: 100%; max-width: 480px; background: var(--card); display: flex; flex-direction: column; height: 100dvh; }
+    header { background: var(--primary); color: white; padding: 14px 16px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 6px rgba(0,0,0,0.1); }
+    header h1 { margin: 0; font-size: 1.1rem; display: flex; align-items: center; gap: 6px; }
+    .controls { display: flex; gap: 8px; align-items: center; }
+    .timer-select, .clear-btn { background: rgba(255,255,255,0.2); color: white; border: none; padding: 6px 10px; border-radius: 6px; font-size: 0.8rem; cursor: pointer; }
+    .timer-select option { color: black; }
+    #chat { flex: 1; padding: 16px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; }
+    .msg { max-width: 82%; padding: 12px 14px; border-radius: 16px; line-height: 1.45; font-size: 0.95rem; word-wrap: break-word; }
+    .bot { background: var(--bot-msg); align-self: flex-start; border-bottom-left-radius: 4px; }
+    .user { background: var(--user-msg); color: white; align-self: flex-end; border-bottom-right-radius: 4px; }
+    .quick-moods { display: flex; gap: 8px; padding: 10px 14px; overflow-x: auto; border-top: 1px solid #eee; scrollbar-width: none; }
+    .quick-moods::-webkit-scrollbar { display: none; }
+    .mood-btn { border: 1px solid #dce4e0; background: #fafafa; padding: 7px 13px; border-radius: 20px; cursor: pointer; font-size: 0.85rem; white-space: nowrap; }
+    .mood-btn:active { background: var(--bot-msg); transform: scale(0.97); }
+    .input-area { display: flex; padding: 12px; border-top: 1px solid #eee; gap: 8px; background: #fff; }
+    input { flex: 1; padding: 12px 15px; border: 1px solid #ccc; border-radius: 24px; outline: none; font-size: 0.95rem; }
+    input:focus { border-color: var(--primary); }
+    button.send { background: var(--primary); color: white; border: none; padding: 0 20px; border-radius: 24px; cursor: pointer; font-weight: 600; }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header>
+      <h1>🌿 CalmCompanion</h1>
+      <div class="controls">
+        <select id="intervalSelect" class="timer-select" onchange="setCheckInTimer()">
+          <option value="0">Ping: Off</option>
+          <option value="30">30m</option>
+          <option value="60" selected>1h</option>
+          <option value="180">3h</option>
+        </select>
+        <button class="clear-btn" onclick="clearChat()" title="Reset Chat">↺</button>
+      </div>
+    </header>
+
+    <div id="chat"></div>
+
+    <div class="quick-moods">
+      <button class="mood-btn" onclick="sendQuick('😊 Feeling good')">😊 Good</button>
+      <button class="mood-btn" onclick="sendQuick('😔 Feeling low')">😔 Low</button>
+      <button class="mood-btn" onclick="sendQuick('😰 Anxious / Stressed')">😰 Anxious</button>
+      <button class="mood-btn" onclick="sendQuick('😴 Exhausted')">😴 Tired</button>
+    </div>
+
+    <div class="input-area">
+      <input type="text" id="userInput" placeholder="Write what's on your mind..." onkeypress="if(event.key==='Enter') sendMessage()" />
+      <button class="send" onclick="sendMessage()">Send</button>
+    </div>
+  </div>
+
+  <script>
+    // 1. Dynamically inject Web App Manifest so it stays inside 1 file
+    const manifest = {
+      name: "CalmCompanion Personal Check-In",
+      short_name: "CalmCompanion",
+      start_url: ".",
+      display: "standalone",
+      background_color: "#f4f7f6",
+      theme_color: "#4a7c59",
+      icons: [{
+        src: "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%234a7c59'/><text x='50%' y='55%' dominant-baseline='middle' text-anchor='middle' font-size='55'>🌿</text></svg>",
+        sizes: "192x192 512x512",
+        type: "image/svg+xml",
+        purpose: "any maskable"
+      }]
+    };
+    const link = document.createElement('link');
+    link.rel = 'manifest';
+    link.href = 'data:application/manifest+json,' + encodeURIComponent(JSON.stringify(manifest));
+    document.head.appendChild(link);
+
+    // 2. Register optional Service Worker if sw.js exists in the same folder
+    if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
+      navigator.serviceWorker.register('sw.js').catch(() => {});
+    }
+
+    // 3. Chat & LocalStorage Logic
+    const chat = document.getElementById('chat');
+    let timerId = null;
+    let history = JSON.parse(localStorage.getItem('calm_chat_history') || '[]');
+
+    const responses = {
+      low: "I'm really sorry you're feeling low right now. Remember you don't have to carry everything all at once. Want to tell me what's weighing on you the most?",
+      anxious: "Take a slow, deep breath with me—inhale for 4 seconds, hold for 4, and exhale for 4. You're safe right now. What's making you feel stressed?",
+      tired: "It sounds like your mind and body need some gentle rest. Have you had some water today, or can you step away for 5 minutes?",
+      good: "I'm so glad to hear that! What's been a highlight of your day so far?",
+      default: [
+        "I hear you, and it makes complete sense that you feel that way. Tell me more about it.",
+        "Thank you for sharing that with me. I'm right here with you—how is your body feeling right now?",
+        "That sounds like a lot to process. Be gentle with yourself today. What's one small thing that might bring you comfort right now?"
+      ]
+    };
+
+    function renderMessage(text, sender, save = true) {
+      const div = document.createElement('div');
+      div.className = `msg ${sender}`;
+      div.textContent = text;
+      chat.appendChild(div);
+      chat.scrollTop = chat.scrollHeight;
+      if (save) {
+        history.push({ text, sender });
+        localStorage.setItem('calm_chat_history', JSON.stringify(history.slice(-50)));
+      }
+    }
+
+    function generateReply(input) {
+      const text = input.toLowerCase();
+      if (text.includes('low') || text.includes('sad') || text.includes('down')) return responses.low;
+      if (text.includes('anxious') || text.includes('stress') || text.includes('worry')) return responses.anxious;
+      if (text.includes('tired') || text.includes('exhausted') || text.includes('sleep')) return responses.tired;
+      if (text.includes('good') || text.includes('happy') || text.includes('great')) return responses.good;
+      return responses.default[Math.floor(Math.random() * responses.default.length)];
+    }
+
+    function sendMessage() {
+      const input = document.getElementById('userInput');
+      const text = input.value.trim();
+      if (!text) return;
+      renderMessage(text, 'user');
+      input.value = '';
+      setTimeout(() => renderMessage(generateReply(text), 'bot'), 500);
+    }
+
+    function sendQuick(text) {
+      renderMessage(text, 'user');
+      setTimeout(() => renderMessage(generateReply(text), 'bot'), 500);
+    }
+
+    function clearChat() {
+      localStorage.removeItem('calm_chat_history');
+      history = [];
+      chat.innerHTML = '';
+      renderMessage("Chat reset 🌿 How are you feeling right now?", "bot");
+    }
+
+    function triggerCheckIn() {
+      const checkInMsg = "Hey there 🌿 Just checking in on you. How is your heart and mind feeling right now?";
+      renderMessage(checkInMsg, 'bot');
+      if ("Notification" in window && Notification.permission === "granted") {
+        new Notification("CalmCompanion Check-In", { body: checkInMsg });
+      }
+    }
+
+    function setCheckInTimer() {
+      if (timerId) clearInterval(timerId);
+      const mins = parseInt(document.getElementById('intervalSelect').value, 10);
+      if (mins > 0) {
+        if ("Notification" in window && Notification.permission !== "granted" && Notification.permission !== "denied") {
+          Notification.requestPermission();
+        }
+        timerId = setInterval(triggerCheckIn, mins * 60 * 1000);
+      }
+    }
+
+    // Load saved history or show initial greeting
+    if (history.length > 0) {
+      history.forEach(item => renderMessage(item.text, item.sender, false));
+    } else {
+      renderMessage("Hi! I'm your personal emotional support companion. I'll check in on you regularly. How are you feeling at this moment?", "bot");
+    }
+    setCheckInTimer();
+  </script>
+</body>
+</html>
