@@ -16,6 +16,15 @@
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%234a7c59'/><text x='50%' y='55%' dominant-baseline='middle' text-anchor='middle' font-size='55'>🌿</text></svg>" />
   <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%234a7c59'/><text x='50%' y='55%' dominant-baseline='middle' text-anchor='middle' font-size='55'>🌿</text></svg>" />
 
+  <!-- Load Google Gen AI SDK -->
+  <script type="importmap">
+    {
+      "imports": {
+        "@google/genai": "https://esm.run/@google/genai"
+      }
+    }
+  </script>
+
   <style>
     :root {
       --bg: #f4f7f6;
@@ -30,11 +39,10 @@
     .app { width: 100%; max-width: 480px; background: var(--card); display: flex; flex-direction: column; height: 100dvh; }
     header { background: var(--primary); color: white; padding: 14px 16px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 6px rgba(0,0,0,0.1); }
     header h1 { margin: 0; font-size: 1.1rem; display: flex; align-items: center; gap: 6px; }
-    .controls { display: flex; gap: 8px; align-items: center; }
-    .timer-select, .clear-btn { background: rgba(255,255,255,0.2); color: white; border: none; padding: 6px 10px; border-radius: 6px; font-size: 0.8rem; cursor: pointer; }
-    .timer-select option { color: black; }
+    .controls { display: flex; gap: 6px; align-items: center; }
+    .action-btn { background: rgba(255,255,255,0.2); color: white; border: none; padding: 6px 10px; border-radius: 6px; font-size: 0.8rem; cursor: pointer; }
     #chat { flex: 1; padding: 16px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; }
-    .msg { max-width: 82%; padding: 12px 14px; border-radius: 16px; line-height: 1.45; font-size: 0.95rem; word-wrap: break-word; }
+    .msg { max-width: 82%; padding: 12px 14px; border-radius: 16px; line-height: 1.45; font-size: 0.95rem; word-wrap: break-word; white-space: pre-wrap; }
     .bot { background: var(--bot-msg); align-self: flex-start; border-bottom-left-radius: 4px; }
     .user { background: var(--user-msg); color: white; align-self: flex-end; border-bottom-right-radius: 4px; }
     .quick-moods { display: flex; gap: 8px; padding: 10px 14px; overflow-x: auto; border-top: 1px solid #eee; scrollbar-width: none; }
@@ -42,9 +50,19 @@
     .mood-btn { border: 1px solid #dce4e0; background: #fafafa; padding: 7px 13px; border-radius: 20px; cursor: pointer; font-size: 0.85rem; white-space: nowrap; }
     .mood-btn:active { background: var(--bot-msg); transform: scale(0.97); }
     .input-area { display: flex; padding: 12px; border-top: 1px solid #eee; gap: 8px; background: #fff; }
-    input { flex: 1; padding: 12px 15px; border: 1px solid #ccc; border-radius: 24px; outline: none; font-size: 0.95rem; }
-    input:focus { border-color: var(--primary); }
+    input[type="text"] { flex: 1; padding: 12px 15px; border: 1px solid #ccc; border-radius: 24px; outline: none; font-size: 0.95rem; }
+    input[type="text"]:focus { border-color: var(--primary); }
     button.send { background: var(--primary); color: white; border: none; padding: 0 20px; border-radius: 24px; cursor: pointer; font-weight: 600; }
+    
+    /* Modal for API Key */
+    #keyModal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); justify-content: center; align-items: center; z-index: 100; padding: 20px; }
+    .modal-content { background: white; padding: 20px; border-radius: 12px; width: 100%; max-width: 380px; display: flex; flex-direction: column; gap: 12px; }
+    .modal-content h3 { margin: 0 0 4px 0; font-size: 1.1rem; }
+    .modal-content input { padding: 10px; border: 1px solid #ccc; border-radius: 6px; font-size: 0.9rem; width: 100%; }
+    .modal-buttons { display: flex; gap: 8px; justify-content: flex-end; margin-top: 4px; }
+    .modal-buttons button { padding: 8px 14px; border-radius: 6px; border: none; cursor: pointer; font-weight: 600; }
+    .save-key { background: var(--primary); color: white; }
+    .cancel-key { background: #eee; color: #333; }
   </style>
 </head>
 <body>
@@ -52,13 +70,8 @@
     <header>
       <h1>🌿 CalmCompanion</h1>
       <div class="controls">
-        <select id="intervalSelect" class="timer-select" onchange="setCheckInTimer()">
-          <option value="0">Ping: Off</option>
-          <option value="30">30m</option>
-          <option value="60" selected>1h</option>
-          <option value="180">3h</option>
-        </select>
-        <button class="clear-btn" onclick="clearChat()" title="Reset Chat">↺</button>
+        <button class="action-btn" onclick="openKeyModal()" title="API Key Settings">⚙️ Key</button>
+        <button class="action-btn" onclick="clearChat()" title="Reset Chat">↺</button>
       </div>
     </header>
 
@@ -77,8 +90,23 @@
     </div>
   </div>
 
-  <script>
-    // 1. Dynamically inject Web App Manifest so it stays inside 1 file
+  <!-- API Key Modal -->
+  <div id="keyModal">
+    <div class="modal-content">
+      <h3>Enter Gemini API Key</h3>
+      <p style="font-size:0.85rem; color:#666; margin:0;">Your key is stored securely in your browser's local storage and is only used to talk to Gemini.</p>
+      <input type="password" id="apiKeyInput" placeholder="AIzaSy..." />
+      <div class="modal-buttons">
+        <button class="cancel-key" onclick="closeKeyModal()">Cancel</button>
+        <button class="save-key" onclick="saveApiKey()">Save Key</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    import { GoogleGenAI } from "@google/genai";
+
+    // PWA Manifest setup
     const manifest = {
       name: "CalmCompanion Personal Check-In",
       short_name: "CalmCompanion",
@@ -98,27 +126,59 @@
     link.href = 'data:application/manifest+json,' + encodeURIComponent(JSON.stringify(manifest));
     document.head.appendChild(link);
 
-    // 2. Register optional Service Worker if sw.js exists in the same folder
     if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
       navigator.serviceWorker.register('sw.js').catch(() => {});
     }
 
-    // 3. Chat & LocalStorage Logic
     const chat = document.getElementById('chat');
-    let timerId = null;
     let history = JSON.parse(localStorage.getItem('calm_chat_history') || '[]');
+    let chatSession = null;
 
-    const responses = {
-      low: "I'm really sorry you're feeling low right now. Remember you don't have to carry everything all at once. Want to tell me what's weighing on you the most?",
-      anxious: "Take a slow, deep breath with me—inhale for 4 seconds, hold for 4, and exhale for 4. You're safe right now. What's making you feel stressed?",
-      tired: "It sounds like your mind and body need some gentle rest. Have you had some water today, or can you step away for 5 minutes?",
-      good: "I'm so glad to hear that! What's been a highlight of your day so far?",
-      default: [
-        "I hear you, and it makes complete sense that you feel that way. Tell me more about it.",
-        "Thank you for sharing that with me. I'm right here with you—how is your body feeling right now?",
-        "That sounds like a lot to process. Be gentle with yourself today. What's one small thing that might bring you comfort right now?"
-      ]
-    };
+    function getApiKey() {
+      return localStorage.getItem('gemini_api_key') || '';
+    }
+
+    async function initGemini() {
+      const apiKey = getApiKey();
+      if (!apiKey) return;
+      try {
+        const ai = new GoogleGenAI({ apiKey: apiKey });
+        // Format history for SDK chats if available, keeping conversation context
+        const formattedHistory = history.map(msg => ({
+          role: msg.sender === 'user' ? 'user' : 'model',
+          parts: [{ text: msg.text }]
+        }));
+
+        chatSession = ai.chats.create({
+          model: 'gemini-2.5-flash',
+          history: formattedHistory.length > 0 ? formattedHistory : undefined,
+          config: {
+            systemInstruction: "You are a warm, deeply empathetic, and supportive personal emotional companion. Your job is to listen actively, validate feelings gently, offer supportive coping tips when appropriate, and check in on how the user is doing. Keep your responses concise, conversational, and comforting."
+          }
+        });
+      } catch (e) {
+        console.error("Failed to initialize Gemini session", e);
+      }
+    }
+
+    window.openKeyModal = function() {
+      document.getElementById('apiKeyInput').value = getApiKey();
+      document.getElementById('keyModal').style.display = 'flex';
+    }
+
+    window.closeKeyModal = function() {
+      document.getElementById('keyModal').style.display = 'none';
+    }
+
+    window.saveApiKey = function() {
+      const key = document.getElementById('apiKeyInput').value.trim();
+      if (key) {
+        localStorage.setItem('gemini_api_key', key);
+        closeKeyModal();
+        initGemini();
+        renderMessage("API Key saved successfully! 🌿 We are connected to Gemini.", "bot");
+      }
+    }
 
     function renderMessage(text, sender, save = true) {
       const div = document.createElement('div');
@@ -132,62 +192,67 @@
       }
     }
 
-    function generateReply(input) {
-      const text = input.toLowerCase();
-      if (text.includes('low') || text.includes('sad') || text.includes('down')) return responses.low;
-      if (text.includes('anxious') || text.includes('stress') || text.includes('worry')) return responses.anxious;
-      if (text.includes('tired') || text.includes('exhausted') || text.includes('sleep')) return responses.tired;
-      if (text.includes('good') || text.includes('happy') || text.includes('great')) return responses.good;
-      return responses.default[Math.floor(Math.random() * responses.default.length)];
-    }
-
-    function sendMessage() {
+    window.sendMessage = async function() {
       const input = document.getElementById('userInput');
       const text = input.value.trim();
       if (!text) return;
+
+      const apiKey = getApiKey();
+      if (!apiKey) {
+        renderMessage(text, 'user');
+        input.value = '';
+        setTimeout(() => {
+          renderMessage("Please click the **⚙️ Key** button in the top right corner to enter your Gemini API key first.", "bot");
+          openKeyModal();
+        }, 400);
+        return;
+      }
+
+      if (!chatSession) {
+        await initGemini();
+      }
+
       renderMessage(text, 'user');
       input.value = '';
-      setTimeout(() => renderMessage(generateReply(text), 'bot'), 500);
+
+      // Show temporary typing indicator
+      const typingDiv = document.createElement('div');
+      typingDiv.className = 'msg bot';
+      typingDiv.textContent = '...';
+      chat.appendChild(typingDiv);
+      chat.scrollTop = chat.scrollHeight;
+
+      try {
+        const result = await chatSession.sendMessage({ message: text });
+        chat.removeChild(typingDiv);
+        renderMessage(result.text, 'bot');
+      } catch (err) {
+        chat.removeChild(typingDiv);
+        renderMessage("Sorry, I had trouble connecting to Gemini. Please check if your API key is correct.", "bot");
+      }
     }
 
-    function sendQuick(text) {
-      renderMessage(text, 'user');
-      setTimeout(() => renderMessage(generateReply(text), 'bot'), 500);
+    window.sendQuick = function(text) {
+      document.getElementById('userInput').value = text;
+      window.sendMessage();
     }
 
-    function clearChat() {
+    window.clearChat = function() {
       localStorage.removeItem('calm_chat_history');
       history = [];
       chat.innerHTML = '';
+      chatSession = null;
+      initGemini();
       renderMessage("Chat reset 🌿 How are you feeling right now?", "bot");
     }
 
-    function triggerCheckIn() {
-      const checkInMsg = "Hey there 🌿 Just checking in on you. How is your heart and mind feeling right now?";
-      renderMessage(checkInMsg, 'bot');
-      if ("Notification" in window && Notification.permission === "granted") {
-        new Notification("CalmCompanion Check-In", { body: checkInMsg });
-      }
-    }
-
-    function setCheckInTimer() {
-      if (timerId) clearInterval(timerId);
-      const mins = parseInt(document.getElementById('intervalSelect').value, 10);
-      if (mins > 0) {
-        if ("Notification" in window && Notification.permission !== "granted" && Notification.permission !== "denied") {
-          Notification.requestPermission();
-        }
-        timerId = setInterval(triggerCheckIn, mins * 60 * 1000);
-      }
-    }
-
-    // Load saved history or show initial greeting
+    // Startup
     if (history.length > 0) {
       history.forEach(item => renderMessage(item.text, item.sender, false));
     } else {
-      renderMessage("Hi! I'm your personal emotional support companion. I'll check in on you regularly. How are you feeling at this moment?", "bot");
+      renderMessage("Hi! I'm your personal emotional support companion powered by Gemini. Click **⚙️ Key** in the top right to add your API key, or just start chatting!", "bot");
     }
-    setCheckInTimer();
+    initGemini();
   </script>
 </body>
 </html>
